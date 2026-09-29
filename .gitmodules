@@ -1,0 +1,6 @@
+[submodule "ace-step"]
+	path = third_party/ace-step
+	url = https://github.com/ace-step/ACE-Step-1.5.git
+[submodule "fastvideo"]
+	path = third_party/fastvideo
+	url = https://github.com/hao-ai-lab/FastVideo

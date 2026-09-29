@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zira</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Zira">
+  <meta name="theme-color" content="#2f6fed">
+  <script>
+    // The theme before the first paint (no flash of the other one): light unless dark was chosen here.
+    try { document.documentElement.dataset.theme = localStorage.getItem("zira-theme") === "dark" ? "dark" : "light"; }
+    catch (e) { document.documentElement.dataset.theme = "light"; }
+  </script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <button id="menu-btn" class="menu-btn" type="button" aria-label="Open settings" aria-controls="settings-drawer" aria-expanded="false">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+    <div class="brand">
+      <span class="logo">Zira</span>
+      <span id="model-label" class="model" title="Loaded model">—</span>
+      <div id="model-mode-toggle" class="model-mode-toggle" role="group" aria-label="Model mode" hidden>
+        <button id="model-mode-light" type="button" class="model-mode-btn" data-mode="light" title="Qwen3 4B Heretic - fast, low-latency; for realtime/voice/casual chat">LIGHT</button>
+        <button id="model-mode-newlight" type="button" class="model-mode-btn" data-mode="newlight" title="Qwen3.5 4B Heretic - the newer fast model, to compare with LIGHT">NEWLIGHT</button>
+        <button id="model-mode-balanced" type="button" class="model-mode-btn" data-mode="balanced" title="Qwen3 8B Heretic - a balance of speed and quality for everyday chat and tasks">BALANCED</button>
+        <button id="model-mode-deep" type="button" class="model-mode-btn" data-mode="deep" title="For coding, reasoning, tools, complex tasks">DEEP</button>
+      </div>
+      <span id="model-mode-status" class="model-mode-status" hidden></span>
+    </div>
+    <div class="header-right">
+      <select id="mode" class="mode-select" aria-label="Mode" title="What Zira may do" hidden></select>
+      <span id="status" class="status checking" title="Checking…">
+        <span class="dot"></span><span id="status-text">CHECKING…</span>
+      </span>
+      <button id="lora-btn" class="lora-btn" type="button" title="LoRA Studio - download images of a name and train a LoRA on them" aria-label="LoRA Studio">LoRA</button>
+      <span id="notify-control" class="notify-control" hidden>
+        <button id="notify-btn" type="button" class="notify-btn" title="Get a phone notification when a video is ready">🔔 Enable notifications</button>
+        <span id="notify-status" class="notify-status"></span>
+      </span>
+      <button id="library-btn" class="library-btn" type="button" title="Chats and memory - every conversation, and what Zira remembers" aria-label="Chats and memory">💬</button>
+      <button id="gallery-btn" class="gallery-btn" type="button" title="Gallery - every image and video" aria-label="Gallery">▦</button>
+      <button id="reset-btn" class="gallery-btn reset-btn" type="button" title="Reset - stop what is being made, unload the image and video models (free memory), load the chat model again" aria-label="Reset">⟲</button>
+      <button id="theme-toggle" class="theme-toggle" type="button" title="Switch to dark mode" aria-label="Switch to dark mode">☾</button>
+      <button id="new-chat" type="button"><span class="nc-icon" aria-hidden="true">+</span><span class="nc-long">New conversation</span><span class="nc-short">New chat</span></button>
+    </div>
+  </header>
+
+  <div id="error-banner" class="error-banner" role="alert" hidden>
+    <span id="error-text"></span>
+    <button id="error-close" type="button" aria-label="Dismiss">×</button>
+  </div>
+
+  <main id="messages" aria-live="polite">
+    <div id="empty" class="empty">Say hello to Zira. Try: <em>Remember that I prefer Kotlin.</em></div>
+  </main>
+
+  <div id="voice-bar" class="voice-bar" hidden>
+    <button id="voice-power-btn" type="button" class="voice-power-btn" title="Voice is on - the STT model loads into RAM on first use. Click to turn off and free that memory.">🎤 ON</button>
+    <button id="voice-btn" type="button" class="voice-btn" title="Press and hold, then speak">
+      <span id="voice-icon">🎤</span>
+    </button>
+    <span id="voice-status" class="voice-status">READY</span>
+    <span id="voice-level" class="voice-level" title="Mic input level vs. the speech threshold" hidden>
+      <span id="voice-level-fill" class="voice-level-fill"></span>
+      <span id="voice-level-threshold" class="voice-level-threshold"></span>
+    </span>
+    <span id="voice-transcript" class="voice-transcript"></span>
+    <div id="tts-voice-toggle" class="image-style-toggle tts-voice-toggle" role="group" aria-label="Reply voice" hidden>
+      <button id="tts-voice-qwen3" type="button" class="image-style-btn" data-tts-voice="qwen3" data-name="Qwen3 TTS - local Ollama voice" title="Qwen3 TTS (local) - fast, natural, local voice">QWEN3</button>
+      <button id="tts-voice-kokoro" type="button" class="image-style-btn" data-tts-voice="kokoro" data-name="Kokoro - natural local voice, speaks while Zira is still writing" title="Kokoro TTS (local) - streams sentence by sentence; Hinglish supported">KOKORO</button>
+      <button id="tts-voice-indicf5" type="button" class="image-style-btn" data-tts-voice="indicf5" data-name="IndicF5 Hinglish - slow (~10s per second of speech), best with Hindi script" title="IndicF5-Hinglish - Indian voice, slow; sounds best with Hindi (Devanagari) text">INDICF5</button>
+    </div>
+    <label class="voice-continuous">
+      <input type="checkbox" id="voice-continuous">
+      Continuous (say "Hello Zira")
+    </label>
+  </div>
+
+  <div id="music-player" class="music-player" hidden>
+    <div class="music-info">
+      <div id="music-title" class="music-title"></div>
+      <div id="music-source" class="music-source"></div>
+    </div>
+    <div class="music-controls">
+      <button id="music-play" type="button" title="Play">▶</button>
+      <button id="music-pause" type="button" title="Pause">⏸</button>
+      <button id="music-stop" type="button" title="Stop">⏹</button>
+    </div>
+  </div>
+
+  <div id="image-attached" class="image-attached" hidden>
+    <span id="image-attached-name"></span>
+    <button id="image-attached-remove" type="button" title="Remove attached image">✕</button>
+  </div>
+  <form id="composer" autocomplete="off">
+    <input id="image-upload-input" type="file" accept="image/png,image/jpeg,image/webp,application/pdf,.pdf,.txt,.md,.markdown,.csv,.json,.docx,.doc,.rtf,.html,.htm,.odt" hidden>
+    <!-- display:contents on desktop (see style.css) makes this wrapper invisible to #composer's
+         flex row - these three sit inline exactly as before. Only on a narrow/mobile viewport does
+         it become a real flex row of its own, above the textarea, instead of cramming everything
+         (up to 5 controls plus the textarea) onto one line too narrow to hold them. -->
+    <div class="composer-tools">
+      <button id="image-upload-btn" type="button" title="Attach a photo (ask about it, edit or animate it) or a document (ask about it)" hidden>📎</button>
+      <div id="image-style-toggle" class="image-style-toggle" role="group" aria-label="Image style" hidden>
+        <button id="image-style-none" type="button" class="image-style-btn" data-style="none" data-name="None - image model unloaded" title="No image model loaded - frees memory. Pick a model to generate images.">NONE</button>
+        <button id="image-style-realistic" type="button" class="image-style-btn" data-style="realistic" data-name="Perfection Realistic ILXL" title="Perfection Realistic ILXL - photorealistic SDXL (Illustrious XL) model; edit_image works with it too">REALISTIC</button>
+        <button id="image-style-lightning" type="button" class="image-style-btn" data-style="lightning" data-name="RealVisXL 4.0 Lightning" title="RealVisXL V4.0 Lightning - newer photorealistic SDXL model, few-step; edit_image works with it too">LIGHTNING</button>
+        <button id="image-style-realvis5" type="button" class="image-style-btn" data-style="realvis5" data-name="RealVisXL 5.0" title="RealVisXL V5.0 - newest full photorealistic SDXL model (25 steps, slower than Lightning); edit_image and face photos work with it too">REALVIS 5</button>
+      </div>
+      <div id="video-model-toggle" class="image-style-toggle" role="group" aria-label="Video model" hidden>
+        <button id="video-model-none" type="button" class="image-style-btn" data-video-model="none" data-name="None - video model unloaded" title="No video model loaded - frees memory. Pick a model to generate videos.">NO VIDEO</button>
+        <button id="video-model-ltx" type="button" class="image-style-btn" data-video-model="ltx" data-name="LTX-Video 2B distilled - much faster, lower detail" title="LTX-Video 2B distilled - 8 steps, no guidance pass; long videos from continued pieces">LTX 2B</button>
+        <button id="video-model-fastmetal" type="button" class="image-style-btn" data-video-model="fastmetal" data-name="FastMetal 1.3B - fastest, single clips up to ~5s" title="FastMetal-QAD 1.3B - Wan 2.1 distilled to 3 steps on Apple MLX; fastest, one clip of up to ~5s per video">FASTMETAL 1.3B</button>
+        <button id="video-model-hunyuan" type="button" class="image-style-btn" data-video-model="hunyuan" data-name="HunyuanVideo 1.5 - 480p, animates a picture (a video from text starts with a made first frame); slow on this Mac" title="HunyuanVideo 1.5 480p image-to-video, step-distilled (8 steps), 4-bit on this Mac; 24 fps, 5s clips that continue from each other; slow - many minutes per clip">HUNYUAN</button>
+      </div>
+      <div id="video-resolution-toggle" class="image-style-toggle" role="group" aria-label="Video resolution" hidden>
+        <button id="video-resolution-320p" type="button" class="image-style-btn" data-video-resolution="320p" title="320p (576x320) - faster, less detail">320P</button>
+        <button id="video-resolution-480p" type="button" class="image-style-btn" data-video-resolution="480p" title="480p (832x480) - more detail, roughly 2-3x slower">480P</button>
+      </div>
+      <div id="video-orientation-toggle" class="image-style-toggle" role="group" aria-label="Video orientation" hidden>
+        <button id="video-orientation-landscape" type="button" class="image-style-btn" data-video-orientation="landscape" title="Landscape - wider than tall (e.g. 832x480)">LANDSCAPE</button>
+        <button id="video-orientation-portrait" type="button" class="image-style-btn" data-video-orientation="portrait" title="Portrait - taller than wide, fills a phone screen (e.g. 480x832)">PORTRAIT</button>
+      </div>
+      <div id="image-resolution-toggle" class="image-style-toggle" role="group" aria-label="Image resolution" hidden>
+        <button id="image-resolution-720" type="button" class="image-style-btn" data-resolution="720" title="720x720 - fastest, ~49% of 1024's pixels">720</button>
+        <button id="image-resolution-1024" type="button" class="image-style-btn" data-resolution="1024" title="1024x1024 - this model family's native resolution">1024</button>
+      </div>
+    </div>
+    <textarea id="input" rows="1" placeholder="Message Zira…  (Enter to send, Shift+Enter for a new line)" autofocus></textarea>
+    <button id="send" type="submit">Send</button>
+  </form>
+  <div id="mode-hint" class="mode-hint"></div>
+
+  <div id="library" class="gallery library" role="dialog" aria-modal="true" aria-label="Chats and memory" hidden>
+    <div class="gallery-bar">
+      <h2 class="gallery-title">Chats &amp; memory</h2>
+      <div id="library-tabs" class="gallery-tabs" role="group" aria-label="Show">
+        <button type="button" data-tab="chats" class="active">Chats</button>
+        <button type="button" data-tab="memory">Memory</button>
+        <button type="button" data-tab="learned">Learned</button>
+      </div>
+      <button id="library-close" class="gallery-close" type="button" title="Close" aria-label="Close">✕</button>
+    </div>
+    <div id="library-chats" class="library-pane">
+      <input id="library-search" class="library-search" type="search" placeholder="Search your chats…" autocomplete="off">
+      <ul id="library-chat-list" class="library-list"></ul>
+      <p id="library-chats-empty" class="gallery-empty" hidden>No chats found.</p>
+      <button id="library-more" class="gallery-more" type="button" hidden>Load more</button>
+    </div>
+    <div id="library-memory" class="library-pane" hidden>
+      <div class="library-actions">
+        <button id="memory-add" type="button">+ Add a memory</button>
+        <span class="library-hint">Zira uses these in every chat. Tap one to change it.</span>
+      </div>
+      <ul id="library-memory-list" class="library-list"></ul>
+      <p id="library-memory-empty" class="gallery-empty" hidden>Zira doesn't remember anything yet.</p>
+    </div>
+    <div id="library-learned" class="library-pane" hidden>
+      <div class="library-actions">
+        <button id="learned-study" type="button">Study now</button>
+        <span id="learned-status" class="library-hint"></span>
+      </div>
+      <ul id="library-learned-list" class="library-list"></ul>
+      <p id="library-learned-empty" class="gallery-empty" hidden>Nothing learned yet. Each night Zira reviews the day's questions and keeps better answers here.</p>
+    </div>
+  </div>
+
+  <div id="gallery" class="gallery" role="dialog" aria-modal="true" aria-label="Gallery" hidden>
+    <div class="gallery-bar">
+      <button id="gallery-back" class="gallery-back" type="button" hidden>‹ Back</button>
+      <h2 class="gallery-title">Gallery</h2>
+      <div id="gallery-tabs" class="gallery-tabs" role="group" aria-label="Show">
+        <button type="button" data-kind="" class="active">All</button>
+        <button type="button" data-kind="video">Videos</button>
+        <button type="button" data-kind="image">Images</button>
+        <button type="button" data-kind="audio">Audio</button>
+      </div>
+      <button id="gallery-close" class="gallery-close" type="button" title="Close" aria-label="Close gallery">✕</button>
+    </div>
+    <div id="gallery-grid" class="gallery-grid"></div>
+    <p id="gallery-empty" class="gallery-empty" hidden>Nothing here yet - ask Zira for an image, a video or a song.</p>
+    <button id="gallery-more" class="gallery-more" type="button" hidden>Load more</button>
+    <div id="gallery-detail" class="gallery-detail" hidden>
+      <div id="gallery-media" class="gallery-media"></div>
+      <dl id="gallery-info" class="gallery-info"></dl>
+      <div class="gallery-actions">
+        <button id="gallery-again" type="button" title="Send the same request again">Make again</button>
+        <button id="gallery-edit-request" type="button" title="Put the request in the message box to change it">Edit request</button>
+        <button id="gallery-edit-image" type="button" title="Attach this image to change it" hidden>Edit this image</button>
+        <button id="gallery-animate" type="button" title="Make a video that starts from this image (HunyuanVideo or LTX)" hidden>Animate</button>
+        <button id="gallery-longer" type="button" title="Continue this video from its last frame (HunyuanVideo or LTX)" hidden>Make longer</button>
+        <a id="gallery-download" class="gallery-download" download>Download</a>
+        <button id="gallery-delete" type="button" class="gallery-delete">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="lightbox" class="lightbox" hidden>
+    <button id="lightbox-close" class="lightbox-close" type="button" title="Close">✕</button>
+    <img id="lightbox-image" alt="">
+    <a id="lightbox-download" class="lightbox-download" download title="Download">⬇ Download</a>
+  </div>
+
+  <!-- Phone-only settings menu (see mobile-menu.js). Hidden by CSS on desktop and until the phone
+       layout is active; the real controls (mode-hint, Light/Deep, image style/resolution, voice
+       power) are moved in here by mobile-menu.js and put back when the window widens. -->
+  <div id="drawer-backdrop" class="drawer-backdrop"></div>
+  <aside id="settings-drawer" class="settings-drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" aria-hidden="true">
+    <div class="drawer-head">
+      <div>
+        <div id="drawer-title" class="drawer-title">Settings</div>
+        <div class="drawer-sub">Zira</div>
+      </div>
+      <button id="drawer-close" class="drawer-close" type="button" aria-label="Close settings">✕</button>
+    </div>
+    <div class="drawer-body">
+      <section class="drawer-group" data-watch="mode">
+        <h3 class="drawer-label">Mode</h3>
+        <div id="mode-seg" class="seg" role="group" aria-label="Mode"></div>
+        <div id="slot-mode-hint"></div>
+      </section>
+      <section class="drawer-group">
+        <h3 class="drawer-label">Model</h3>
+        <div id="slot-model-toggle"></div>
+        <div id="slot-model-label" class="drawer-slot"></div>
+      </section>
+      <section class="drawer-group" data-watch="image-style-toggle image-resolution-toggle">
+        <h3 class="drawer-label">Image generation</h3>
+        <div class="drawer-field">
+          <span class="drawer-field-label">Style</span>
+          <div id="slot-style"></div>
+          <p id="image-style-caption" class="drawer-caption"></p>
+        </div>
+        <div class="drawer-field">
+          <span class="drawer-field-label">Resolution</span>
+          <div id="slot-resolution"></div>
+        </div>
+      </section>
+      <section class="drawer-group" data-watch="video-model-toggle video-resolution-toggle video-orientation-toggle">
+        <h3 class="drawer-label">Video generation</h3>
+        <div class="drawer-field">
+          <span class="drawer-field-label">Model</span>
+          <div id="slot-video"></div>
+          <p id="video-model-caption" class="drawer-caption"></p>
+        </div>
+        <div class="drawer-field">
+          <span class="drawer-field-label">Resolution</span>
+          <div id="slot-video-resolution"></div>
+        </div>
+        <div class="drawer-field">
+          <span class="drawer-field-label">Orientation</span>
+          <div id="slot-video-orientation"></div>
+        </div>
+      </section>
+      <section class="drawer-group" data-watch="theme-toggle">
+        <h3 class="drawer-label">Appearance</h3>
+        <div class="drawer-row">
+          <div class="drawer-row-text">
+            <span class="drawer-field-label">Light / dark</span>
+          </div>
+          <div id="slot-theme"></div>
+        </div>
+      </section>
+      <section class="drawer-group" data-watch="notify-control">
+        <h3 class="drawer-label">Notifications</h3>
+        <div class="drawer-field">
+          <div id="slot-notify"></div>
+        </div>
+      </section>
+      <section class="drawer-group" data-watch="voice-bar">
+        <h3 class="drawer-label">Voice</h3>
+        <div class="drawer-row">
+          <div class="drawer-row-text">
+            <span class="drawer-field-label">Voice input</span>
+            <span class="drawer-caption">Loads the speech model on first use. Turn off to free memory.</span>
+          </div>
+          <div id="slot-voice-power"></div>
+        </div>
+        <div class="drawer-field" id="drawer-tts-field">
+          <span class="drawer-field-label">Reply voice</span>
+          <div id="slot-tts-voice"></div>
+          <p id="tts-voice-caption" class="drawer-caption"></p>
+        </div>
+      </section>
+      <section class="drawer-group">
+        <h3 class="drawer-label">LoRA training</h3>
+        <div class="drawer-row">
+          <div class="drawer-row-text">
+            <span class="drawer-field-label">LoRA Studio</span>
+            <span class="drawer-caption">Download images of a name and train a LoRA on them. Opens in a new tab.</span>
+          </div>
+          <div id="slot-lora"></div>
+        </div>
+      </section>
+    </div>
+  </aside>
+
+  <script src="app.js"></script>
+  <script src="mobile-menu.js"></script>
+</body>
+</html>

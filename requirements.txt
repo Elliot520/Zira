@@ -1,0 +1,40 @@
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.8
+pydantic-settings>=2.4
+httpx>=0.27
+websockets>=13.0
+ddgs>=9.0
+faster-whisper>=1.0
+mlx-whisper>=0.4
+python-multipart>=0.0.9
+fpdf2>=2.7
+
+# Image and video generation (IMAGE_GENERATION_ENABLED / VIDEO_GENERATION_ENABLED): app/tools/image.py, video*.py,
+# face_id.py, inpaint.py. Versions are the ones this Mac runs (checked 2026-09-28).
+torch>=2.14
+torchvision>=0.29
+diffusers>=0.40
+transformers>=5.17
+accelerate>=1.15
+safetensors>=0.8
+huggingface_hub>=1.32
+sentencepiece>=0.2  # T5 / UMT5 tokenizers of the video models
+protobuf>=7.36
+peft>=0.21  # LoRA weights (load_lora_weights)
+ftfy>=6.0  # the Wan/UMT5 prompt cleaner
+einops>=0.8
+pillow>=12.3
+numpy>=2.5
+av>=18.1  # reading a video to continue it
+opencv-python>=4.14  # masks for edit_image areas
+onnxruntime>=1.30  # FaceID face embeddings
+psutil>=7.2
+lxml>=6.1
+cryptography>=50.0
+
+# dev / test
+pytest>=8.0
+pytest-asyncio>=0.24
+pywebpush>=2.5  # phone notifications (Web Push), app/push.py
+pypdf>=6.0  # reading PDFs for document questions, app/tools/documents.py

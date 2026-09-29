@@ -1,0 +1,12 @@
+# Kokoro TTS worker environment (.venv-kokoro, Python 3.11 - the kokoro/misaki packages need Python < 3.13).
+# Kept separate from Zira's own .venv (Python 3.14) so nothing there is upgraded or downgraded.
+# Install:  /opt/homebrew/bin/python3.11 -m venv .venv-kokoro && .venv-kokoro/bin/pip install -r third_party/kokoro/requirements.txt
+# The model (hexgrad/Kokoro-82M, ~330 MB, Apache-2.0) and spaCy's small English model download on first start.
+kokoro==0.9.4
+misaki[en]==0.9.4
+soundfile==0.14.0
+torch==2.14.0
+numpy==2.4.6
+espeakng-loader==0.2.4
+phonemizer-fork==3.3.2
+spacy==3.8.16
