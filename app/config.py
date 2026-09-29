@@ -233,8 +233,9 @@ class Settings(BaseSettings):
     tts_provider: str = "unavailable"
     tts_voice: str = "Rishi"  # male, Indian-accented English (see README "Voice" for alternatives)
     tts_rate: int = 0  # 0 = provider default words-per-minute
-    qwen3_tts_model: str = "mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit"
-    qwen3_tts_voice: str = "Ryan"
+    qwen3_tts_model: str = "mlx-community/Qwen3-TTS-12Hz-0.6B-Base-8bit"
+    qwen3_tts_adapter: str = "akashicmarga/qwen3-tts-hindi-lora-grpo"
+    qwen3_tts_voice: str = "Hindi GRPO"
     qwen3_tts_timeout: float = Field(default=120.0, gt=0)
     # Optional second voice: IndicF5-Hinglish (voice cloning, Hindi-script text sounds best). Runs in its
     # own process from the separate `.venv-tts` environment (see third_party/indicf5/NOTICE.md). When

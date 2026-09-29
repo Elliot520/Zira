@@ -34,12 +34,12 @@ FAKE_WORKER = textwrap.dedent(
 
 FAKE_QWEN_WORKER = textwrap.dedent(
     """
-    import json, sys
-    print(json.dumps({"ready": True, "model": "fake-qwen"}), flush=True)
+    import json, os, sys
+    print(json.dumps({"ready": True, "model": os.environ["QWEN3_TTS_MODEL"], "adapter": os.environ["QWEN3_TTS_ADAPTER"]}), flush=True)
     for line in sys.stdin:
         request = json.loads(line)
         with open(request["out"], "wb") as audio:
-            audio.write(b"RIFF-fake-wav:" + request["text"].encode())
+            audio.write(b"RIFF:" + os.environ["QWEN3_TTS_MODEL"].encode() + b":" + os.environ["QWEN3_TTS_ADAPTER"].encode() + b":" + request["text"].encode())
         print(json.dumps({"ok": True, "seconds": 0.1, "audio_seconds": 1.0}), flush=True)
     """
 )
@@ -127,10 +127,12 @@ async def test_indicf5_refuses_to_speak_when_not_loaded(worker):
 
 
 async def test_qwen3_worker_starts_speaks_and_stops(qwen_worker):
-    tts = Qwen3TTS(sys.executable, qwen_worker, "fake-qwen", timeout=10, startup_timeout=10)
+    tts = Qwen3TTS(
+        sys.executable, qwen_worker, "fake-qwen", adapter="fake-adapter", timeout=10, startup_timeout=10
+    )
     await tts.start()
     assert tts.running
-    assert await tts.synthesize("Hello from Qwen") == b"RIFF-fake-wav:Hello from Qwen"
+    assert await tts.synthesize("Hello from Qwen") == b"RIFF:fake-qwen:fake-adapter:Hello from Qwen"
     await tts.stop()
     assert not tts.running
 
@@ -169,14 +171,16 @@ def test_factory_defaults_to_qwen3_and_keeps_kokoro_fast_switch():
         _env_file=None,
         tts_provider="kokoro",
         ollama_host="http://localhost:11434",
-        qwen3_tts_model="qwen3-tts",
-        qwen3_tts_voice="alloy",
+        qwen3_tts_model="mlx-community/Qwen3-TTS-12Hz-0.6B-Base-8bit",
+        qwen3_tts_adapter="akashicmarga/qwen3-tts-hindi-lora-grpo",
+        qwen3_tts_voice="Hindi GRPO",
     ))
     assert isinstance(tts, SwitchableTTS)
     assert tts.choice == "qwen3"
     assert set(tts.choices) == {"qwen3", "kokoro"}
     assert "qwen3" in tts.engines
     assert tts.engines["qwen3"].name == "qwen3"
+    assert tts.engines["qwen3"].adapter == "akashicmarga/qwen3-tts-hindi-lora-grpo"
     assert tts.engines["qwen3"].language == "Auto"
 
 

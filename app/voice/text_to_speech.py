@@ -232,11 +232,13 @@ class Qwen3TTS(TextToSpeech):
 
     name = "qwen3"
 
-    def __init__(self, python: str, worker: str, model: str, *, voice: str = "Ryan", language: str = "English",
+    def __init__(self, python: str, worker: str, model: str, *, adapter: str = "akashicmarga/qwen3-tts-hindi-lora-grpo",
+                 voice: str = "Hindi GRPO", language: str = "Auto",
                  timeout: float = 180.0, startup_timeout: float = 300.0, log_path: str | None = None) -> None:
         self.python = python
         self.worker = worker
         self.model = model
+        self.adapter = adapter
         self.voice = voice
         self.language = language
         self.timeout = timeout
@@ -257,13 +259,12 @@ class Qwen3TTS(TextToSpeech):
                 raise TTSUnavailableError(
                     f"Qwen3-TTS Python environment is missing ({self.python}). Install dependencies from requirements.txt."
                 )
-            env = {**os.environ, "QWEN3_TTS_MODEL": self.model, "QWEN3_TTS_VOICE": self.voice,
-                   "QWEN3_TTS_LANGUAGE": self.language}
+            env = dict(os.environ, QWEN3_TTS_MODEL=self.model, QWEN3_TTS_ADAPTER=self.adapter, QWEN3_TTS_VOICE=self.voice, QWEN3_TTS_LANGUAGE=self.language)
             stderr = open(self.log_path, "ab") if self.log_path else asyncio.subprocess.DEVNULL
             try:
                 self._proc = await asyncio.create_subprocess_exec(
                     self.python, self.worker, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
-                    stderr=stderr,
+                    stderr=stderr, env=env,
                 )
             finally:
                 if self.log_path:
@@ -563,7 +564,8 @@ def create_text_to_speech(settings: "Settings") -> TextToSpeech:
 
         qwen3 = Qwen3TTS(
             sys.executable, str(PROJECT_ROOT / "third_party" / "qwen3_tts" / "worker.py"),
-            settings.qwen3_tts_model, voice=settings.qwen3_tts_voice, language="Auto",
+            settings.qwen3_tts_model, adapter=settings.qwen3_tts_adapter,
+            voice=settings.qwen3_tts_voice, language="Auto",
             timeout=settings.qwen3_tts_timeout, log_path=str(PROJECT_ROOT / "logs" / "qwen3_tts.log"),
         )
         kokoro = KokoroTTS(
@@ -578,7 +580,8 @@ def create_text_to_speech(settings: "Settings") -> TextToSpeech:
 
         return Qwen3TTS(
             sys.executable, str(PROJECT_ROOT / "third_party" / "qwen3_tts" / "worker.py"),
-            settings.qwen3_tts_model, voice=settings.qwen3_tts_voice, language="Auto",
+            settings.qwen3_tts_model, adapter=settings.qwen3_tts_adapter,
+            voice=settings.qwen3_tts_voice, language="Auto",
             timeout=settings.qwen3_tts_timeout, log_path=str(PROJECT_ROOT / "logs" / "qwen3_tts.log"),
         )
     if provider == "say":
