@@ -177,6 +177,7 @@ def test_factory_defaults_to_qwen3_and_keeps_kokoro_fast_switch():
     assert set(tts.choices) == {"qwen3", "kokoro"}
     assert "qwen3" in tts.engines
     assert tts.engines["qwen3"].name == "qwen3"
+    assert tts.engines["qwen3"].language == "Auto"
 
 
 # ---------------------------------------------------------------------------- API

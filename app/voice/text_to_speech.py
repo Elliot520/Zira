@@ -563,7 +563,7 @@ def create_text_to_speech(settings: "Settings") -> TextToSpeech:
 
         qwen3 = Qwen3TTS(
             sys.executable, str(PROJECT_ROOT / "third_party" / "qwen3_tts" / "worker.py"),
-            settings.qwen3_tts_model, voice=settings.qwen3_tts_voice, language="English",
+            settings.qwen3_tts_model, voice=settings.qwen3_tts_voice, language="Auto",
             timeout=settings.qwen3_tts_timeout, log_path=str(PROJECT_ROOT / "logs" / "qwen3_tts.log"),
         )
         kokoro = KokoroTTS(
@@ -578,7 +578,7 @@ def create_text_to_speech(settings: "Settings") -> TextToSpeech:
 
         return Qwen3TTS(
             sys.executable, str(PROJECT_ROOT / "third_party" / "qwen3_tts" / "worker.py"),
-            settings.qwen3_tts_model, voice=settings.qwen3_tts_voice, language="English",
+            settings.qwen3_tts_model, voice=settings.qwen3_tts_voice, language="Auto",
             timeout=settings.qwen3_tts_timeout, log_path=str(PROJECT_ROOT / "logs" / "qwen3_tts.log"),
         )
     if provider == "say":
