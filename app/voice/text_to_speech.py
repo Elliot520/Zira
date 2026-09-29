@@ -15,12 +15,11 @@ import base64
 import json
 import logging
 import os
+import sys
 import tempfile
 import time
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
-
-import httpx
 
 from app.voice.errors import SynthesisError, TTSUnavailableError
 
@@ -229,78 +228,120 @@ class IndicF5TTS(TextToSpeech):
 
 
 class Qwen3TTS(TextToSpeech):
-    """Qwen3-TTS via Ollama's local generation API. This is the default voice for the fast local path."""
+    """Qwen3-TTS through a managed MLX-Audio worker, loaded only while selected."""
 
     name = "qwen3"
 
-    def __init__(self, host: str, model: str, *, voice: str = "alloy", timeout: float = 120.0) -> None:
-        self.host = host.rstrip("/")
+    def __init__(self, python: str, worker: str, model: str, *, voice: str = "Ryan", language: str = "English",
+                 timeout: float = 180.0, startup_timeout: float = 300.0, log_path: str | None = None) -> None:
+        self.python = python
+        self.worker = worker
         self.model = model
         self.voice = voice
+        self.language = language
         self.timeout = timeout
-        self._client = httpx.AsyncClient(base_url=self.host, timeout=timeout)
+        self.startup_timeout = startup_timeout
+        self.log_path = log_path
+        self._proc: asyncio.subprocess.Process | None = None
+        self._lock = asyncio.Lock()
+
+    @property
+    def running(self) -> bool:
+        return self._proc is not None and self._proc.returncode is None
+
+    async def start(self) -> None:
+        async with self._lock:
+            if self.running:
+                return
+            if not os.path.exists(self.python):
+                raise TTSUnavailableError(
+                    f"Qwen3-TTS Python environment is missing ({self.python}). Install dependencies from requirements.txt."
+                )
+            env = {**os.environ, "QWEN3_TTS_MODEL": self.model, "QWEN3_TTS_VOICE": self.voice,
+                   "QWEN3_TTS_LANGUAGE": self.language}
+            stderr = open(self.log_path, "ab") if self.log_path else asyncio.subprocess.DEVNULL
+            try:
+                self._proc = await asyncio.create_subprocess_exec(
+                    self.python, self.worker, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
+                    stderr=stderr,
+                )
+            finally:
+                if self.log_path:
+                    stderr.close()
+            try:
+                reply = await self._read_reply(self.startup_timeout)
+            except Exception:
+                await self._kill()
+                raise
+            if not reply.get("ready"):
+                await self._kill()
+                raise TTSUnavailableError(f"Qwen3-TTS failed to load: {reply.get('error', 'unknown error')}")
+            logger.info("Qwen3-TTS loaded (model=%s voice=%s language=%s)", self.model, self.voice, self.language)
+
+    async def stop(self) -> None:
+        async with self._lock:
+            await self._kill()
 
     async def aclose(self) -> None:
-        await self._client.aclose()
+        await self.stop()
+
+    async def _kill(self) -> None:
+        proc, self._proc = self._proc, None
+        if proc is None or proc.returncode is not None:
+            return
+        if proc.stdin is not None:
+            proc.stdin.close()
+        try:
+            await asyncio.wait_for(proc.wait(), timeout=5)
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+
+    async def _read_reply(self, timeout: float) -> dict:
+        assert self._proc is not None and self._proc.stdout is not None
+        try:
+            line = await asyncio.wait_for(self._proc.stdout.readline(), timeout=timeout)
+        except asyncio.TimeoutError as exc:
+            raise SynthesisError(f"Qwen3-TTS did not respond within {timeout:.0f}s.") from exc
+        if not line:
+            raise SynthesisError("The Qwen3-TTS worker stopped unexpectedly (see logs/qwen3_tts.log).")
+        try:
+            return json.loads(line)
+        except ValueError as exc:
+            raise SynthesisError(f"Unexpected output from the Qwen3-TTS worker: {line[:200]!r}") from exc
 
     async def synthesize(self, text: str, *, voice: str | None = None) -> bytes:
         text = text.strip()
         if not text:
             raise SynthesisError("Cannot synthesize empty text.")
-
-        payloads = [
-            {"model": self.model, "prompt": text, "stream": False, "voice": voice or self.voice},
-            {"model": self.model, "input": text, "stream": False, "voice": voice or self.voice},
-            {"model": self.model, "prompt": text, "stream": False, "speaker": voice or self.voice},
-            {"model": self.model, "input": text, "stream": False, "speaker": voice or self.voice},
-        ]
-
-        last_error: Exception | None = None
-        for payload in payloads:
-            try:
-                response = await self._client.post("/api/generate", json=payload)
-            except httpx.HTTPError as exc:
-                last_error = exc
-                continue
-
-            if response.status_code >= 400:
-                last_error = RuntimeError(f"Ollama rejected the TTS request ({response.status_code}: {response.text[:200]})")
-                continue
-
-            content_type = response.headers.get("content-type", "")
-            if content_type.startswith("audio/"):
-                if response.content:
-                    return response.content
-                raise SynthesisError("The Qwen3-TTS response was empty.")
-
-            try:
-                data = response.json()
-            except ValueError:
-                last_error = ValueError("Qwen3-TTS returned a non-JSON response.")
-                continue
-            if not isinstance(data, dict):
-                continue
-
-            audio = data.get("audio")
-            if isinstance(audio, str):
+        if not self.running:
+            await self.start()
+        fd, path = tempfile.mkstemp(suffix=".wav", prefix="jarvis-qwen3-tts-")
+        os.close(fd)
+        try:
+            async with self._lock:
+                assert self._proc is not None and self._proc.stdin is not None
+                request = {"text": text, "out": path, "voice": voice or self.voice, "language": self.language}
+                self._proc.stdin.write((json.dumps(request, ensure_ascii=False) + "\n").encode())
+                await self._proc.stdin.drain()
                 try:
-                    decoded = base64.b64decode(audio)
-                    if decoded:
-                        return decoded
-                except ValueError:
-                    pass
-            wav = data.get("wav")
-            if isinstance(wav, str):
-                try:
-                    decoded = base64.b64decode(wav)
-                    if decoded:
-                        return decoded
-                except ValueError:
-                    pass
-
-        if last_error is not None:
-            raise SynthesisError(f"Qwen3-TTS failed: {last_error}")
-        raise TTSUnavailableError(f"Qwen3-TTS is not available on {self.host}; install the '{self.model}' model in Ollama.")
+                    reply = await self._read_reply(self.timeout)
+                except SynthesisError:
+                    await self._kill()
+                    raise
+            if not reply.get("ok"):
+                raise SynthesisError(f"Qwen3-TTS failed: {reply.get('error', 'unknown error')}")
+            with open(path, "rb") as fh:
+                audio = fh.read()
+            if not audio.startswith(b"RIFF"):
+                raise SynthesisError("Qwen3-TTS produced an empty or invalid WAV file.")
+            logger.info("Qwen3-TTS spoke %.1fs of audio in %.1fs", reply.get("audio_seconds", 0), reply.get("seconds", 0))
+            return audio
+        finally:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
 
 
 class KokoroTTS(TextToSpeech):
@@ -521,8 +562,9 @@ def create_text_to_speech(settings: "Settings") -> TextToSpeech:
         from app.config import PROJECT_ROOT
 
         qwen3 = Qwen3TTS(
-            settings.ollama_host, settings.qwen3_tts_model,
-            voice=settings.qwen3_tts_voice, timeout=settings.qwen3_tts_timeout,
+            sys.executable, str(PROJECT_ROOT / "third_party" / "qwen3_tts" / "worker.py"),
+            settings.qwen3_tts_model, voice=settings.qwen3_tts_voice, language="English",
+            timeout=settings.qwen3_tts_timeout, log_path=str(PROJECT_ROOT / "logs" / "qwen3_tts.log"),
         )
         kokoro = KokoroTTS(
             settings.kokoro_python, str(PROJECT_ROOT / "third_party" / "kokoro" / "worker.py"),
@@ -532,7 +574,13 @@ def create_text_to_speech(settings: "Settings") -> TextToSpeech:
         )
         return SwitchableTTS({"qwen3": qwen3, "kokoro": kokoro}, default="qwen3")
     if provider == "qwen3":
-        return Qwen3TTS(settings.ollama_host, settings.qwen3_tts_model, voice=settings.qwen3_tts_voice, timeout=settings.qwen3_tts_timeout)
+        from app.config import PROJECT_ROOT
+
+        return Qwen3TTS(
+            sys.executable, str(PROJECT_ROOT / "third_party" / "qwen3_tts" / "worker.py"),
+            settings.qwen3_tts_model, voice=settings.qwen3_tts_voice, language="English",
+            timeout=settings.qwen3_tts_timeout, log_path=str(PROJECT_ROOT / "logs" / "qwen3_tts.log"),
+        )
     if provider == "say":
         say = SayTTS(voice=settings.tts_voice, rate=settings.tts_rate or None)
         if not settings.tts_indicf5_enabled:

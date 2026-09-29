@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from app.config import Settings
 from app.main import create_app
 from app.voice.errors import SynthesisError, TTSUnavailableError
-from app.voice.text_to_speech import IndicF5TTS, SayTTS, SwitchableTTS, create_text_to_speech
+from app.voice.text_to_speech import IndicF5TTS, Qwen3TTS, SayTTS, SwitchableTTS, create_text_to_speech
 
 FAKE_WORKER = textwrap.dedent(
     """
@@ -32,6 +32,18 @@ FAKE_WORKER = textwrap.dedent(
     """
 )
 
+FAKE_QWEN_WORKER = textwrap.dedent(
+    """
+    import json, sys
+    print(json.dumps({"ready": True, "model": "fake-qwen"}), flush=True)
+    for line in sys.stdin:
+        request = json.loads(line)
+        with open(request["out"], "wb") as audio:
+            audio.write(b"RIFF-fake-wav:" + request["text"].encode())
+        print(json.dumps({"ok": True, "seconds": 0.1, "audio_seconds": 1.0}), flush=True)
+    """
+)
+
 
 @pytest.fixture
 def worker(tmp_path):
@@ -42,6 +54,13 @@ def worker(tmp_path):
 
 def _indicf5(worker, **kw) -> IndicF5TTS:
     return IndicF5TTS(sys.executable, worker, voice="MAR_M_WIKI_00001", timeout=10, startup_timeout=10, **kw)
+
+
+@pytest.fixture
+def qwen_worker(tmp_path):
+    path = tmp_path / "fake_qwen_worker.py"
+    path.write_text(FAKE_QWEN_WORKER, encoding="utf-8")
+    return str(path)
 
 
 class _FakeSay(SayTTS):
@@ -105,6 +124,15 @@ async def test_indicf5_worker_crash_is_reported_and_cleaned_up(worker, monkeypat
 async def test_indicf5_refuses_to_speak_when_not_loaded(worker):
     with pytest.raises(TTSUnavailableError, match="not loaded"):
         await _indicf5(worker).synthesize("hello")
+
+
+async def test_qwen3_worker_starts_speaks_and_stops(qwen_worker):
+    tts = Qwen3TTS(sys.executable, qwen_worker, "fake-qwen", timeout=10, startup_timeout=10)
+    await tts.start()
+    assert tts.running
+    assert await tts.synthesize("Hello from Qwen") == b"RIFF-fake-wav:Hello from Qwen"
+    await tts.stop()
+    assert not tts.running
 
 
 # ---------------------------------------------------------------------------- the switch

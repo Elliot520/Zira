@@ -334,12 +334,13 @@ async def test_an_abandoned_request_does_not_confuse_the_next_one(worker):
     await tts.stop()
 
 
-def test_the_factory_makes_kokoro_the_default_with_say_as_fallback():
+def test_the_factory_makes_qwen3_default_with_kokoro_as_fast_switch():
     from app.config import Settings
 
     tts = create_text_to_speech(Settings(_env_file=None, tts_provider="kokoro", kokoro_voice="hf_beta"))
-    assert isinstance(tts, SwitchableTTS) and tts.choice == "kokoro" and tts.choices == ("kokoro", "say")
-    assert tts.voice == "Kokoro (hf_beta)" and tts.engines["kokoro"].worker.endswith("third_party/kokoro/worker.py")
+    assert isinstance(tts, SwitchableTTS) and tts.choice == "qwen3" and tts.choices == ("qwen3", "kokoro")
+    assert tts.engines["qwen3"].name == "qwen3"
+    assert tts.engines["kokoro"].worker.endswith("third_party/kokoro/worker.py")
 
 
 # ------------------------------------------------------------------ the chat WebSocket
